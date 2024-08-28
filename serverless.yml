@@ -1,0 +1,65 @@
+service: cache
+frameworkVersion: '3'
+provider:
+  name: aws
+  runtime: nodejs20.x
+  stage: dev
+  region: us-east-1
+
+functions:
+  fn:
+    handler: src/index.lambda
+    role: CacheFnRole
+    environment:
+      SECRET_ARN: !Ref SecretsManagerRandom
+    events:
+      - httpApi:
+          path: /cache
+          method: get
+
+resources:
+  Resources:
+    SecretsManagerRandom:
+      Type: AWS::SecretsManager::Secret
+      Properties:
+        Name: ${self:service}-random
+        Description: Random string
+        GenerateSecretString:
+          SecretStringTemplate: '{"random": "this will be replaced with the random string"}'
+          GenerateStringKey: random
+          PasswordLength: 16
+          ExcludeCharacters: '"@/\'
+          ExcludePunctuation: true
+          ExcludeNumbers: false
+          ExcludeUppercase: false
+          ExcludeLowercase: false
+          RequireEachIncludedType: true
+          IncludeSpace: false
+
+    CacheFnRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: ${self:service}-fn-role
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        Policies:
+          - PolicyName: SecretsManagerRandomPolicy
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - secretsmanager:GetSecretValue
+                  Resource: !Ref SecretsManagerRandom
+outputs:
+  SecretArn:
+    Value:
+      Ref: SecretsManagerRandom
+    Export:
+      Name: ${self:service}-random-arn
+      
